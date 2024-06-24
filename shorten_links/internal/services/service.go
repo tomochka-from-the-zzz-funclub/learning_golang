@@ -15,7 +15,7 @@ type WorkLink struct {
 	LongLink     string
 	StatRedirect int
 	TimeLife     time.Duration
-	LastAccess   int64
+	Create       int64
 }
 type SetHashLink struct {
 	SetLink map[HashLink]WorkLink
@@ -34,7 +34,7 @@ func NewSetHashLink() SetHashLink {
 		for now := range time.Tick(time.Second) {
 			m.mutex.Lock()
 			for k, v := range m.SetLink {
-				if now.Unix()-v.LastAccess > int64(v.TimeLife.Seconds()) {
+				if now.Unix()-v.Create > int64(v.TimeLife.Seconds()) {
 					delete(m.SetLink, k)
 				}
 			}
@@ -59,7 +59,7 @@ func (s *SetHashLink) CreateShortLink(llink string, timelife time.Duration) {
 	l := WorkLink{
 		LongLink:     llink,
 		StatRedirect: 0,
-		LastAccess:   time.Now().Unix(),
+		Create:       time.Now().Unix(),
 		TimeLife:     timelife,
 	}
 	s.mutex.Lock()
