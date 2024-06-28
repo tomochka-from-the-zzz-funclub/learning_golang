@@ -1,0 +1,79 @@
+{
+	"info": {
+		"_postman_id": "f3b17994-1d7b-4a74-b24e-232b4d00ff68",
+		"name": "Shortner microservice",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "36344336"
+	},
+	"item": [
+		{
+			"name": "http://localhost/shortlink/get",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"long_link\" : \"https://stack\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost/shortlink/get",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"path": [
+						"shortlink",
+						"get"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost/shortlink/redirect?url=",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost/shortlink/redirect?url=ier-t/",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"path": [
+						"shortlink",
+						"redirect"
+					],
+					"query": [
+						{
+							"key": "url",
+							"value": "ier-t/"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost/shortlink/stat?url",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost/shortlink/allstat",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		}
+	]
+}

@@ -10,149 +10,156 @@ import (
 	my_errors "shorten_links/internal/errors"
 	"shorten_links/internal/services"
 
+	"github.com/fasthttp/router"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/valyala/fasthttp"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 type HandlersBuilder struct {
-	s  services.SetHashLink
-	lg zerolog.Logger
+	s    services.SetHashLink
+	lg   zerolog.Logger
+	rout *router.Router
+	//ctx  *fasthttp.RequestCtx
 }
 
+// func (s *Router) SetupProbes() {
+// 	s.engine.GET("/alive", s.builder.BuildAlive())
+// 	s.engine.GET("/ready", s.builder.BuildReady())
+// }
 func HandleCreate() {
 	hb := HandlersBuilder{
-		s:  services.NewSetHashLink(),
-		lg: zerolog.New(os.Stderr).With().Timestamp().Logger().Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.UnixDate}),
+		s:    services.NewSetHashLink(),
+		lg:   zerolog.New(os.Stderr).With().Timestamp().Logger().Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.UnixDate}),
+		rout: router.New(),
 	}
-	http.HandleFunc("/shortlink/get", hb.GetShortLink())
-	http.HandleFunc("/shortlink/redirect", hb.Redirect())
-	http.HandleFunc("/shortlink/stat", hb.GetStat())
-	http.HandleFunc("/shortlink/allstat", hb.GetAllStat())
+	go func() {
+		//prometheus.MustRegister(requestCounter)
+
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":8090", nil)
+	}()
+
+	hb.rout.POST("/shortlink/get", hb.GetShortLink())
+	hb.rout.GET("/shortlink/redirect", hb.Redirect())
+	hb.rout.GET("/shortlink/stat", hb.GetStat())
+	hb.rout.GET("/shortlink/allstat", hb.GetAllStat())
+	fmt.Println(fasthttp.ListenAndServe(":80", hb.rout.Handler))
 }
 
-func (hb *HandlersBuilder) GetShortLink() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			longlink, timelife, err := ParseJsonL(r)
+func (hb *HandlersBuilder) GetShortLink() func(ctx *fasthttp.RequestCtx) {
+	return metrics(func(ctx *fasthttp.RequestCtx) {
+		if ctx.IsPost() {
+			longlink, timelife, err := ParseJsonL(ctx)
 			if err != nil {
-				//err_ :=
-				WriteJsonErr(&w, err.Error())
+				err_ := WriteJsonErr(ctx, err.Error())
 
-				w.WriteHeader(http.StatusBadRequest)
-				// if err_ != nil {
-				// 	hb.lg.Warn().
-				// 		Msgf("message from func GetShortLink %v", err_.Error())
-				// 	return
-				// }
+				if err_ != nil {
+					hb.lg.Warn().
+						Msgf("message from func GetShortLink %v", err_.Error())
+				}
 				hb.lg.Warn().
 					Msgf("message from func GetShortLink %v", err.Error())
 			} else {
 				hb.s.CreateShortLink(longlink, timelife)
 				slink, err := hb.s.GetShortLink(longlink)
 				if err != nil {
-					WriteJsonErr(&w, err.Error())
-					w.WriteHeader(http.StatusNotFound)
+					WriteJsonErr(ctx, err.Error())
 					hb.lg.Warn().
 						Msgf("message from func GetShortLink %v", err.Error())
-					return
 				}
-				err = WriteJson(&w, slink)
+				err = WriteJson(ctx, slink)
 				if err != nil {
-					WriteJsonErr(&w, err.Error())
-					w.WriteHeader(http.StatusInternalServerError)
+					WriteJsonErr(ctx, err.Error())
 					hb.lg.Warn().
 						Msgf("message from func GetShortLink %v", err.Error())
-					return
 				}
 			}
 		} else {
-			WriteJsonErr(&w, my_errors.ErrMethodNotAllowed.Error())
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			WriteJsonErr(ctx, my_errors.ErrMethodNotAllowed.Error())
+			ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
 			hb.lg.Warn().
 				Msgf("message from func GetShortLink %v", my_errors.ErrMethodNotAllowed.Error())
 
 		}
-	}
+	}, "GetShortLink")
 }
 
-func (hb *HandlersBuilder) Redirect() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+func (hb *HandlersBuilder) Redirect() func(ctx *fasthttp.RequestCtx) {
+	return metrics(func(ctx *fasthttp.RequestCtx) {
+		if ctx.IsGet() {
 			findhashlink := services.HashLink{
-				ShortLink: r.URL.Query().Get("url"),
+				ShortLink: string(ctx.QueryArgs().Peek("url")),
 			}
 			llink, err := hb.s.GetLongLink(findhashlink)
 			if err != nil {
-				WriteJsonErr(&w, err.Error())
-				w.WriteHeader(http.StatusNotFound)
+				WriteJsonErr(ctx, err.Error())
 				hb.lg.Warn().
 					Msgf("message from func Redirect %v", err.Error())
 				return
 			}
-			http.Redirect(w, r, llink.LongLink, http.StatusSeeOther)
+			ctx.Redirect(llink.LongLink, http.StatusSeeOther)
 			hb.s.SetRedirect(llink.LongLink)
 		} else {
-			WriteJsonErr(&w, my_errors.ErrMethodNotAllowed.Error())
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			WriteJsonErr(ctx, my_errors.ErrMethodNotAllowed.Error())
+			ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
 			log.Warn().
 				Msgf("message from func Redirect %v", my_errors.ErrMethodNotAllowed.Error())
 		}
-	}
+	}, "Redirect")
 }
 
-func (hb *HandlersBuilder) GetStat() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+func (hb *HandlersBuilder) GetStat() func(ctx *fasthttp.RequestCtx) {
+	return metrics(func(ctx *fasthttp.RequestCtx) {
+		if ctx.IsGet() {
 			findhashlink := services.HashLink{
-				ShortLink: r.URL.Query().Get("url"),
+				ShortLink: string(ctx.QueryArgs().Peek("url")),
 			}
 			llink, err := hb.s.GetLongLink(findhashlink)
 			if err != nil {
-				WriteJsonErr(&w, err.Error())
-				w.WriteHeader(http.StatusNotFound)
+				WriteJsonErr(ctx, err.Error())
 				log.Warn().
 					Msgf("message from func GetStat %v", err.Error())
 				return
 			}
 			red, err := hb.s.GetStatLink(llink.LongLink)
 			if err != nil {
-				WriteJsonErr(&w, err.Error())
-				w.WriteHeader(http.StatusNotFound)
+				WriteJsonErr(ctx, err.Error())
 				log.Warn().
 					Msgf("message from func GetStat %v", err.Error())
 				return
 			}
-			fmt.Fprint(w, "Переходов по ссылке: ", red)
+			fmt.Fprint(ctx, "Переходов по ссылке: ", red)
 		} else {
-			WriteJsonErr(&w, my_errors.ErrMethodNotAllowed.Error())
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			WriteJsonErr(ctx, my_errors.ErrMethodNotAllowed.Error())
 			log.Warn().
 				Msgf("message from func GetStat %v", my_errors.ErrMethodNotAllowed.Error())
 		}
-	}
+	}, "statistic_one")
 }
 
-func (hb *HandlersBuilder) GetAllStat() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+func (hb *HandlersBuilder) GetAllStat() func(ctx *fasthttp.RequestCtx) {
+	return metrics(func(ctx *fasthttp.RequestCtx) {
+		if ctx.IsGet() {
 			array := hb.s.GetAllStat()
 			if len(array) == 0 {
-				fmt.Fprint(w, "There are no links in the collection")
+				fmt.Fprint(ctx, "There are no links in the collection")
 			} else {
-				w.Header().Set("Content-Type", "application/json") //проставляем заголовок для json
-				err := json.NewEncoder(w).Encode(array)
+				ctx.SetContentType("application/json")
+				ctx.Response.BodyWriter()
+				err := json.NewEncoder((*ctx).Response.BodyWriter()).Encode(array)
 				if err != nil {
-					WriteJsonErr(&w, err.Error())
-					w.WriteHeader(http.StatusInternalServerError)
+					WriteJsonErr(ctx, err.Error())
 					log.Warn().
 						Msgf("message from func GetAllStat %v", err.Error())
 				}
 			}
 		} else {
-			WriteJsonErr(&w, my_errors.ErrMethodNotAllowed.Error())
-			w.WriteHeader(http.StatusMethodNotAllowed)
+			WriteJsonErr(ctx, my_errors.ErrMethodNotAllowed.Error())
 			log.Warn().
 				Msgf("message from func GetAllStat %v", my_errors.ErrMethodNotAllowed.Error())
 		}
-	}
+	}, "all_statistic")
 }

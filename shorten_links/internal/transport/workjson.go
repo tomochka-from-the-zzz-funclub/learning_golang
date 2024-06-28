@@ -1,19 +1,22 @@
 package transport
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	my_errors "shorten_links/internal/errors"
 	"shorten_links/internal/services"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
-func ParseJsonL(r *http.Request) (string, time.Duration, error) {
+func ParseJsonL(ctx *fasthttp.RequestCtx) (string, time.Duration, error) {
 	var data struct {
 		LongLink string `json:"long_link"`
 		TimeLife string `json:"time_life"`
 	}
-	err := json.NewDecoder(r.Body).Decode(&data)
+	err := json.NewDecoder(bytes.NewReader(ctx.Request.Body())).Decode(&data)
 	var empty time.Duration
 	if err != nil {
 		return data.LongLink, empty, my_errors.ErrParseJSON
@@ -40,22 +43,35 @@ func ParseJsonS(r *http.Request) (string, error) {
 	return data.ShortLink, err
 }
 
-func WriteJson(w *http.ResponseWriter, s services.HashLink) error {
-	(*w).Header().Set("Content-Type", "application/json")
-	err := json.NewEncoder(*w).Encode(s)
+func WriteJson(ctx *fasthttp.RequestCtx, s services.HashLink) error {
+	ctx.SetContentType("application/json")
+	ctx.Response.BodyWriter()
+	err := json.NewEncoder((*ctx).Response.BodyWriter()).Encode(s)
 	if err != nil {
 		return my_errors.ErrWriteJSON
 	}
 	return nil
 }
-func WriteJsonErr(w *http.ResponseWriter, mes string) error {
+
+func WriteJsonErr(ctx *fasthttp.RequestCtx, mes string) error {
 	var err_mes struct {
 		ErrorMessage string
 	}
 	err_mes.ErrorMessage = mes
-	(*w).Header().Set("Content-Type", "application/json") //проставляем заголовок для json
-	(*w).WriteHeader(http.StatusBadRequest)
-	err := json.NewEncoder(*w).Encode(err_mes)
+	ctx.SetContentType("application/json")
+	switch mes {
+	case my_errors.ErrNoSlink.Error():
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+	case my_errors.ErrNoLlink.Error():
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+	case my_errors.ErrMethodNotAllowed.Error():
+		ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
+	case my_errors.ErrEqualJSON.Error():
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+	default:
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+	}
+	err := json.NewEncoder((*ctx).Response.BodyWriter()).Encode(err_mes)
 	if err != nil {
 		return my_errors.ErrWriteJSONerr
 	}

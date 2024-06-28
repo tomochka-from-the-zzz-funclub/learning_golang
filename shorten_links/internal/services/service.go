@@ -1,11 +1,11 @@
 package services
 
 import (
+	"fmt"
 	"math/rand"
 	my_errors "shorten_links/internal/errors"
 	"sync"
 	"time"
-	//"time"
 )
 
 type HashLink struct {
@@ -15,7 +15,7 @@ type WorkLink struct {
 	LongLink     string
 	StatRedirect int
 	TimeLife     time.Duration
-	Create       int64
+	Create       time.Time
 }
 type SetHashLink struct {
 	SetLink map[HashLink]WorkLink
@@ -23,9 +23,10 @@ type SetHashLink struct {
 }
 
 type DataLink struct {
-	ShortLink    string
-	LongLink     string
-	StatRedirect int
+	ShortLink    string    `json:"short_link"`
+	LongLink     string    `json:"long_link"`
+	StatRedirect int       `json:"stat_redirect"`
+	Death        time.Time `json:"death"`
 }
 
 func NewSetHashLink() SetHashLink {
@@ -34,7 +35,8 @@ func NewSetHashLink() SetHashLink {
 		for now := range time.Tick(time.Second) {
 			m.mutex.Lock()
 			for k, v := range m.SetLink {
-				if now.Unix()-v.Create > int64(v.TimeLife.Seconds()) {
+				if now.Sub(v.Create) > v.TimeLife {
+					fmt.Println("Удалил")
 					delete(m.SetLink, k)
 				}
 			}
@@ -59,7 +61,7 @@ func (s *SetHashLink) CreateShortLink(llink string, timelife time.Duration) {
 	l := WorkLink{
 		LongLink:     llink,
 		StatRedirect: 0,
-		Create:       time.Now().Unix(),
+		Create:       time.Now(),
 		TimeLife:     timelife,
 	}
 	s.mutex.Lock()
@@ -115,6 +117,8 @@ func (s *SetHashLink) SetRedirect(llink string) error {
 			s.SetLink[slink] = WorkLink{
 				LongLink:     llink,
 				StatRedirect: last + 1,
+				TimeLife:     s.SetLink[slink].TimeLife,
+				Create:       s.SetLink[slink].Create,
 			}
 			s.mutex.Unlock()
 			return nil
@@ -128,10 +132,13 @@ func (s *SetHashLink) GetAllStat() []DataLink {
 	var data []DataLink
 	var d DataLink
 	s.mutex.Lock()
+	//var t time.Time
+	//t = s.SetLink[slink].Create + int64(s.SetLink[slink].TimeLife.Seconds())
 	for slink := range s.SetLink {
 		d.LongLink = s.SetLink[slink].LongLink
 		d.ShortLink = slink.ShortLink
 		d.StatRedirect = s.SetLink[slink].StatRedirect
+		d.Death = s.SetLink[slink].Create.Add(s.SetLink[slink].TimeLife)
 		data = append(data, d)
 	}
 	s.mutex.Unlock()
