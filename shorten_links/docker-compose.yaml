@@ -1,0 +1,16 @@
+services:
+  shorten_links:
+    build: 
+      dockerfile: ./build/Dockerfile
+    ports:
+      - "8081:80"
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "7000:6379"
+    environment:
+      - REDIS_PORT=6379
+      - REDIS_DATABASES=16
+  # redis:6379
+  # localhost:7000
