@@ -1,0 +1,14 @@
+services:
+  study_redis:
+    build: 
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "7000:6379"
+    environment:
+      - REDIS_PORT=6379
+      - REDIS_DATABASES=16
