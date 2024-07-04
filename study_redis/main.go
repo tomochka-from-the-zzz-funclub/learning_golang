@@ -94,26 +94,17 @@ func (hb *HandlersBuilder) Set() func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			key, val, ttl, err_pars := ParseSet(r)
 			if err_pars != nil {
-				fmt.Println("запрос")
 				w.WriteHeader(http.StatusBadRequest)
-				fmt.Println("неверный запрос")
-				fmt.Fprint(w, "Неверный запрос")
 			} else {
 				err := hb.r.rbd.Set(key, val, ttl)
 				if err.Val() != "OK" {
-					// 	hb.lg.Warn().
-					// 		Msgf("message from func Set %v", err.Err().Error())
-					fmt.Println("добавления")
 					w.WriteHeader(http.StatusBadRequest)
-					fmt.Fprint(w, "Ошибка добавления")
 				} else {
 					fmt.Fprint(w, "Элемент с ключом: ", key, " успешно добавлен")
 				}
 			}
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Println("метода")
-			fmt.Fprint(w, "Ошибка метода")
 		}
 	}
 }
@@ -141,8 +132,6 @@ func (hb *HandlersBuilder) Get() func(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	fmt.Println("start")
 	HandleCreate()
-	fmt.Println("start")
 	fmt.Println(http.ListenAndServe(":80", nil))
 }
