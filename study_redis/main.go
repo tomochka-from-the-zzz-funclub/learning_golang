@@ -11,8 +11,6 @@ import (
 
 	"github.com/go-redis/redis"
 	"github.com/rs/zerolog"
-	// "github.com/redis/go-redis/v9"
-	// "gopkg.in/redis.v5"
 )
 
 type Redis struct {
@@ -22,7 +20,7 @@ type Redis struct {
 func NewRedis() *Redis {
 	return &Redis{
 		rbd: redis.NewClient(&redis.Options{
-			Addr:     "localhost:7000",
+			Addr:     "redis:6379",
 			Password: "",
 			DB:       0,
 		}),
@@ -31,7 +29,7 @@ func NewRedis() *Redis {
 
 func (r *Redis) CreateClient() {
 	r.rbd = redis.NewClient(&redis.Options{
-		Addr:     "localhost:7000",
+		Addr:     "redis:6379",
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
@@ -44,35 +42,6 @@ func (r *Redis) Set(key, value string, ttl time.Duration) error {
 func (r *Redis) Get(key string) (string, error) {
 	val, err := r.rbd.Get(key).Result()
 	return val, err
-}
-
-func ExampleClient() {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:7000",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
-
-	err := rdb.Set("key", "value", 0).Err()
-	if err != nil {
-
-		panic(err)
-	}
-
-	val, err := rdb.Get("key").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("key", val)
-
-	val2, err := rdb.Get("key2").Result()
-	if err == redis.Nil {
-		fmt.Println("key2 does not exist")
-	} else if err != nil {
-		panic(err)
-	} else {
-		fmt.Println("key2", val2)
-	}
 }
 
 type HandlersBuilder struct {
@@ -121,23 +90,30 @@ func ParseGet(r *http.Request) (string, error) {
 
 func (hb *HandlersBuilder) Set() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("set")
 		if r.Method == "POST" {
 			key, val, ttl, err_pars := ParseSet(r)
 			if err_pars != nil {
-				fmt.Fprint(w, "Неверный запрос")
+				fmt.Println("запрос")
 				w.WriteHeader(http.StatusBadRequest)
+				fmt.Println("неверный запрос")
+				fmt.Fprint(w, "Неверный запрос")
 			} else {
 				err := hb.r.rbd.Set(key, val, ttl)
 				if err.Val() != "OK" {
 					// 	hb.lg.Warn().
 					// 		Msgf("message from func Set %v", err.Err().Error())
+					fmt.Println("добавления")
 					w.WriteHeader(http.StatusBadRequest)
+					fmt.Fprint(w, "Ошибка добавления")
 				} else {
 					fmt.Fprint(w, "Элемент с ключом: ", key, " успешно добавлен")
 				}
 			}
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
+			fmt.Println("метода")
+			fmt.Fprint(w, "Ошибка метода")
 		}
 	}
 }
@@ -165,7 +141,8 @@ func (hb *HandlersBuilder) Get() func(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	fmt.Println("start")
 	HandleCreate()
-
-	fmt.Println(http.ListenAndServe("8081:80", nil))
+	fmt.Println("start")
+	fmt.Println(http.ListenAndServe(":80", nil))
 }
