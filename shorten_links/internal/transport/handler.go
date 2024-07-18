@@ -19,8 +19,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// type Handler interface {
+// 	GetShortLink()
+// 	Redirect()
+// 	GetStat()
+// 	GetAllStat()
+// }
+
 type HandlersBuilder struct {
-	s    services.SetHashLink
+	s    *Set
 	lg   zerolog.Logger
 	rout *router.Router
 }
@@ -44,8 +51,8 @@ func HandleCreate() {
 }
 
 func (hb *HandlersBuilder) GetShortLink() func(ctx *fasthttp.RequestCtx) {
-	hb.lg.Warn().
-		Msgf("message from func GetShortLink")
+	hb.lg.Info().
+		Msgf("Start func GetShortLink")
 	return metrics(func(ctx *fasthttp.RequestCtx) {
 		if ctx.IsPost() {
 			longlink, timelife, err := ParseJsonL(ctx)
@@ -56,6 +63,7 @@ func (hb *HandlersBuilder) GetShortLink() func(ctx *fasthttp.RequestCtx) {
 					hb.lg.Warn().
 						Msgf("message from func GetShortLink %v", err_.Error())
 				}
+
 				hb.lg.Warn().
 					Msgf("message from func GetShortLink %v", err.Error())
 			} else {
@@ -84,11 +92,12 @@ func (hb *HandlersBuilder) GetShortLink() func(ctx *fasthttp.RequestCtx) {
 }
 
 func (hb *HandlersBuilder) Redirect() func(ctx *fasthttp.RequestCtx) {
+	hb.lg.Info().
+		Msgf("Start func Redirect")
 	return metrics(func(ctx *fasthttp.RequestCtx) {
 		if ctx.IsGet() {
 			findhashlink := string(ctx.QueryArgs().Peek("url"))
-			llink, err := hb.s.Base.GetLongL(findhashlink)
-			//fmt.Println(findhashlink)
+			llink, err := hb.s.GetLongL(findhashlink)
 			if err != nil {
 				WriteJsonErr(ctx, err.Error())
 				hb.lg.Warn().
@@ -96,8 +105,7 @@ func (hb *HandlersBuilder) Redirect() func(ctx *fasthttp.RequestCtx) {
 				return
 			}
 			ctx.Redirect(llink, http.StatusSeeOther)
-			//hb.s.SetRedirect(findhashlink, llink) //передаем сразу пару ключ-значение
-			err = hb.s.Base.Increment(findhashlink)
+			err = hb.s.Increment(findhashlink)
 			if err != nil {
 				WriteJsonErr(ctx, err.Error())
 				hb.lg.Warn().
@@ -113,10 +121,12 @@ func (hb *HandlersBuilder) Redirect() func(ctx *fasthttp.RequestCtx) {
 }
 
 func (hb *HandlersBuilder) GetStat() func(ctx *fasthttp.RequestCtx) {
+	hb.lg.Info().
+		Msgf("Start func GetStat")
 	return metrics(func(ctx *fasthttp.RequestCtx) {
 		if ctx.IsGet() {
 			findhashlink := string(ctx.QueryArgs().Peek("url"))
-			redirect, err := hb.s.Base.GetRedirect(findhashlink)
+			redirect, err := hb.s.GetRedirect(findhashlink)
 			if err != nil {
 				WriteJsonErr(ctx, err.Error())
 				log.Warn().
@@ -133,6 +143,8 @@ func (hb *HandlersBuilder) GetStat() func(ctx *fasthttp.RequestCtx) {
 }
 
 func (hb *HandlersBuilder) GetAllStat() func(ctx *fasthttp.RequestCtx) {
+	hb.lg.Info().
+		Msgf("Start func GetAllStat")
 	return metrics(func(ctx *fasthttp.RequestCtx) {
 		if ctx.IsGet() {
 			array, err := hb.s.GetAllStat()

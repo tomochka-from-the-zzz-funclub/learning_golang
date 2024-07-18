@@ -15,12 +15,6 @@ type Redis struct {
 	rbd *redis.Client
 }
 
-type DataBase struct {
-	LongLink     string    `json:"long_link"`
-	StatRedirect int       `json:"stat_redirect"`
-	Death        time.Time `json:"death"`
-}
-
 func NewRedis() *Redis {
 	client := redis.NewClient(&redis.Options{
 		Addr:     "redis:6379",
@@ -39,16 +33,16 @@ func NewRedis() *Redis {
 	}
 }
 
-func (r *Redis) Set(shortlink string, data DataBase) error {
-	err_l := r.rbd.Set(fmt.Sprintf("%s_longlink", shortlink), data.LongLink, data.Death.Sub(time.Now())).Err()
+func (r *Redis) Set(shortlink string, data InfoLLink) error {
+	err_l := r.rbd.Set(fmt.Sprintf("%s_longlink", shortlink), data.GetLongLink(), data.GetDeath().Sub(time.Now())).Err()
 	if err_l != nil {
 		return err_l
 	}
-	err_r := r.rbd.Set(fmt.Sprintf("%s_redirect", shortlink), strconv.Itoa(data.StatRedirect), data.Death.Sub(time.Now())).Err()
+	err_r := r.rbd.Set(fmt.Sprintf("%s_redirect", shortlink), strconv.Itoa(data.GetStatRedirect()), data.GetDeath().Sub(time.Now())).Err()
 	if err_r != nil {
 		return err_r
 	}
-	err_d := r.rbd.Set(fmt.Sprintf("%s_death", shortlink), data.Death.Format(time.RFC3339), data.Death.Sub(time.Now())).Err()
+	err_d := r.rbd.Set(fmt.Sprintf("%s_death", shortlink), data.GetDeath().Format(time.RFC3339), data.GetDeath().Sub(time.Now())).Err()
 	if err_d != nil {
 		return err_d
 	}
@@ -87,19 +81,11 @@ func (r *Redis) GetDataDeath(shortlink string) (time.Time, error) {
 	return datadeath, nil
 }
 
-func (r *Redis) GetAllData(shortlink string) (DataBase, error) {
-	// var empty DataBase
-	// llink, _ := r.rbd.Get(shortlink).Result()
+func (r *Redis) GetAllData(shortlink string) (InfoLLink, error) {
 	var (
-		data DataBase
+		data DataLLink
 		err  error
 	)
-	// err := json.Unmarshal([]byte(llink), &data)
-	// if err != nil {
-	// 	return empty, my_errors.ErrNoLlink
-	// }
-	// return data, err
-
 	data.LongLink, err = r.rbd.Get(fmt.Sprintf("%s_longlink", shortlink)).Result()
 	if err != nil {
 		return data, my_errors.ErrNoLlink
@@ -123,7 +109,7 @@ func (r *Redis) GetAllData(shortlink string) (DataBase, error) {
 	return data, nil
 }
 
-func (r *Redis) GetAll() (map[string]DataBase, error) {
+func (r *Redis) GetAll() (map[string]InfoLLink, error) {
 	// Получаем все ключи, хранящиеся в Redis
 	keys, err := r.rbd.Keys("*").Result()
 	if err != nil {
@@ -135,19 +121,19 @@ func (r *Redis) GetAll() (map[string]DataBase, error) {
 		return nil, err
 	}
 
-	result := make(map[string]DataBase)
+	result := make(map[string]InfoLLink)
 	for i, key := range keys {
-		data := DataBase{
-			LongLink:     "",
-			StatRedirect: 0,
-			Death:        time.Date(2020, time.April, 17, 12, 34, 56, 0, time.UTC),
-		}
+		var data InfoLLink
+		data.SetLongLink("")
+		data.SetStatRedirect(0)
+		data.SetDeath(time.Date(2020, time.April, 17, 12, 34, 56, 0, time.UTC))
+
 		if strings.HasSuffix(key, "_longlink") {
 			key = strings.TrimSuffix(key, "_longlink")
 			longlink := values[i].(string)
-			data.Death = result[key].Death
-			data.LongLink = longlink
-			data.StatRedirect = result[key].StatRedirect
+			data.SetDeath(result[key].GetDeath())
+			data.SetLongLink(longlink)
+			data.SetStatRedirect(result[key].GetStatRedirect())
 			result[key] = data
 		} else if strings.HasSuffix(key, "_redirect") {
 			key = strings.TrimSuffix(key, "_redirect")
@@ -155,9 +141,9 @@ func (r *Redis) GetAll() (map[string]DataBase, error) {
 			if err != nil {
 				return result, err
 			}
-			data.Death = result[key].Death
-			data.LongLink = result[key].LongLink
-			data.StatRedirect = redirect
+			data.SetDeath(result[key].GetDeath())
+			data.SetLongLink(result[key].GetLongLink())
+			data.SetStatRedirect(redirect)
 			result[key] = data
 		} else if strings.HasSuffix(key, "_death") {
 			key = strings.TrimSuffix(key, "_death")
@@ -165,9 +151,9 @@ func (r *Redis) GetAll() (map[string]DataBase, error) {
 			if err != nil {
 				return result, err
 			}
-			data.Death = datadeath
-			data.LongLink = result[key].LongLink
-			data.StatRedirect = result[key].StatRedirect
+			data.SetDeath(datadeath)
+			data.SetLongLink(result[key].GetLongLink())
+			data.SetStatRedirect(result[key].GetStatRedirect())
 			result[key] = data
 		}
 	}

@@ -2,29 +2,27 @@ package services
 
 import (
 	"math/rand"
-	my_errors "shorten_links/internal/errors"
+	//"shorten_links/internal/services"
 	database "shorten_links/internal/storages/redis"
-	"sync"
 	"time"
 )
 
 type SetHashLink struct {
-	Base  *database.Redis
-	mutex sync.Mutex
+	Base LinkStorage
 }
 
-type DataLink struct {
-	ShortLink    string    `json:"short_link"`
-	LongLink     string    `json:"long_link"`
-	StatRedirect int       `json:"stat_redirect"`
-	Death        time.Time `json:"death"`
-}
+// type DataLink struct {
+// 	ShortLink    string    `json:"short_link"`
+// 	LongLink     string    `json:"long_link"`
+// 	StatRedirect int       `json:"stat_redirect"`
+// 	Death        time.Time `json:"death"`
+// }
 
-func NewSetHashLink() SetHashLink {
+func NewSetHashLink() *SetHashLink {
 	m := SetHashLink{
 		Base: database.NewRedis(),
 	}
-	return m
+	return &m
 }
 
 func HashingLink(LongLink string) string {
@@ -38,47 +36,49 @@ func HashingLink(LongLink string) string {
 }
 
 func (s *SetHashLink) CreateShortLink(llink string, timelife time.Duration) (string, error) {
-	l := database.DataBase{
-		LongLink:     llink,
-		StatRedirect: 0,
-		Death:        time.Now().Add(timelife),
-	}
-	s.mutex.Lock()
-	sslink := HashingLink(l.LongLink)
+	var l database.InfoLLink
+	l.SetLongLink(llink)
+	l.SetStatRedirect(0)
+	l.SetDeath(time.Now().Add(timelife))
+
+	sslink := HashingLink(l.GetLongLink())
 	err := s.Base.Set(sslink, l)
-	s.mutex.Unlock()
 	return sslink, err
 }
 
-func (s *SetHashLink) SetRedirect(slink string, llink database.DataBase) error {
-	s.mutex.Lock()
-
-	new := database.DataBase{
-		LongLink:     llink.LongLink,
-		StatRedirect: llink.StatRedirect + 1,
-		Death:        llink.Death,
-	}
-	s.Base.Set(slink, new)
-
-	s.mutex.Unlock()
-	return my_errors.ErrNoLlink
-}
-
-func (s *SetHashLink) GetAllStat() ([]DataLink, error) {
-	var data []DataLink
-	var d DataLink
-	s.mutex.Lock()
+func (s *SetHashLink) GetAllStat() ([]InfoLink, error) {
+	var data []InfoLink
+	var d InfoLink
 	mapp, err := s.Base.GetAll()
 	if err != nil {
 		return data, err
 	}
 	for slink := range mapp {
-		d.ShortLink = slink
-		d.Death = mapp[slink].Death
-		d.LongLink = mapp[slink].LongLink
-		d.StatRedirect = mapp[slink].StatRedirect
+		d.SetShortLink(slink)
+		d.SetDeath(mapp[slink].GetDeath())
+		d.SetLongLink(mapp[slink].GetLongLink())
+		d.SetStatRedirect(mapp[slink].GetStatRedirect())
 		data = append(data, d)
 	}
-	s.mutex.Unlock()
 	return data, err
+}
+
+func (s *SetHashLink) Set(shortlink string, data database.InfoLLink) error {
+	return s.Base.Set(shortlink, data)
+}
+
+func (s *SetHashLink) GetLongL(shortlink string) (string, error) {
+	return s.Base.GetLongL(shortlink)
+}
+
+func (s *SetHashLink) GetAllData(shortlink string) (database.InfoLLink, error) {
+	return s.Base.GetAllData(shortlink)
+}
+
+func (s *SetHashLink) GetRedirect(shortlink string) (int, error) {
+	return s.Base.GetRedirect(shortlink)
+}
+
+func (s *SetHashLink) Increment(key string) error {
+	return s.Base.Increment(key)
 }
