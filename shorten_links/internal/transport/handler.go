@@ -27,7 +27,7 @@ import (
 // }
 
 type HandlersBuilder struct {
-	s    *Set
+	s    Set
 	lg   zerolog.Logger
 	rout *router.Router
 }
