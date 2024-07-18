@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	my_errors "shorten_links/internal/errors"
-	"shorten_links/internal/services"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -43,7 +42,7 @@ func ParseJsonS(r *http.Request) (string, error) {
 	return data.ShortLink, err
 }
 
-func WriteJson(ctx *fasthttp.RequestCtx, s services.HashLink) error {
+func WriteJson(ctx *fasthttp.RequestCtx, s string) error {
 	ctx.SetContentType("application/json")
 	ctx.Response.BodyWriter()
 	err := json.NewEncoder((*ctx).Response.BodyWriter()).Encode(s)
